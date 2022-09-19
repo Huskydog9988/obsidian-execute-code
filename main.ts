@@ -2,6 +2,7 @@ import {FileSystemAdapter, MarkdownRenderer, MarkdownView, Notice, Plugin} from 
 import * as fs from "fs";
 import * as os from "os"
 import * as child_process from "child_process";
+import piston from "piston-client";
 import {Outputter} from "./Outputter";
 import {ExecutorSettings, SettingsTab} from "./SettingsTab";
 import {
@@ -141,8 +142,7 @@ export default class ExecuteCodePlugin extends Plugin {
 					console.warn(`Could not load all Vault variables! ${vars}`)
 				}
 
-				if (supportedLanguages.some((lang) => language.contains(`language-${lang}`))
-					&& !parent.classList.contains(hasButtonClass)) { // unsupported language
+				if (!parent.classList.contains(hasButtonClass)) {
 
 					parent.classList.add(hasButtonClass);
 					const button = this.createRunButton();
@@ -158,99 +158,107 @@ export default class ExecuteCodePlugin extends Plugin {
 	}
 
 	private addListenerToButton(language: string, srcCode: string, button: HTMLButtonElement, out: Outputter) {
-		if (language.contains("language-js") || language.contains("language-javascript")) {
-			srcCode = addMagicToJS(srcCode);
+		button.addEventListener("click", () => {
+			button.className = runButtonDisabledClass;
+			this.runCode(srcCode, out, button, language.replace("language-", ""));
+		});
 
-			button.addEventListener("click", () => {
-				button.className = runButtonDisabledClass;
-				this.runCode(srcCode, out, button, this.settings.nodePath, this.settings.nodeArgs, "js");
-			});
+		// if (language.contains("language-js") || language.contains("language-javascript")) {
+		// 	srcCode = addMagicToJS(srcCode);
 
-		} else if (language.contains("java")) {
-			button.addEventListener("click", () => {
-				button.className = runButtonDisabledClass;
-				this.runCode(srcCode, out, button, this.settings.javaPath, this.settings.javaArgs, this.settings.javaFileExtension);
-			});
+		// 	button.addEventListener("click", () => {
+		// 		button.className = runButtonDisabledClass;
+		// 		this.runCode(srcCode, out, button, "js");
+		// 	});
 
-		} else if (language.contains("language-python")) {
-			button.addEventListener("click", async () => {
-				button.className = runButtonDisabledClass;
+		// } else if (language.contains("java")) {
+		// 	button.addEventListener("click", () => {
+		// 		button.className = runButtonDisabledClass;
+		// 		this.runCode(srcCode, out, button, "java");
+		// 	});
 
-				if (this.settings.pythonEmbedPlots)	// embed plots into html which shows them in the note
-					srcCode = addInlinePlotsToPython(srcCode);
+		// } else if (language.contains("language-python")) {
+		// 	button.addEventListener("click", async () => {
+		// 		button.className = runButtonDisabledClass;
 
-				srcCode = addMagicToPython(srcCode);
+		// 		if (this.settings.pythonEmbedPlots)	// embed plots into html which shows them in the note
+		// 			srcCode = addInlinePlotsToPython(srcCode);
 
-				this.runCode(srcCode, out, button, this.settings.pythonPath, this.settings.pythonArgs, "py");
-			});
+		// 		srcCode = addMagicToPython(srcCode);
 
-		} else if (language.contains("language-shell") || language.contains("language-bash")) {
-			button.addEventListener("click", () => {
-				button.className = runButtonDisabledClass;
-				this.runCode(srcCode, out, button, this.settings.shellPath, this.settings.shellArgs, this.settings.shellFileExtension);
-			});
+		// 		this.runCode(srcCode, out, button, "py");
+		// 	});
 
-		} else if (language.contains("language-powershell")) {
-			button.addEventListener("click", () => {
-				button.className = runButtonDisabledClass;
-				this.runCode(srcCode, out, button, this.settings.powershellPath, this.settings.powershellArgs, this.settings.powershellFileExtension);
-			});
+		// } else if (language.contains("language-shell") || language.contains("language-bash")) {
+		// 	button.addEventListener("click", () => {
+		// 		button.className = runButtonDisabledClass;
+		// 		this.runCode(srcCode, out, button, "bash");
+		// 	});
 
-		} else if (language.contains("language-cpp")) {
-			button.addEventListener("click", () => {
-				button.className = runButtonDisabledClass;
-				out.clear();
-				this.runCpp(srcCode, out);
-				button.className = runButtonClass;
-			})
+		// } else if (language.contains("language-powershell")) {
+		// 	button.addEventListener("click", () => {
+		// 		button.className = runButtonDisabledClass;
+		// 		this.runCode(srcCode, out, button, "powershell");
+		// 	});
 
-		} else if (language.contains("language-prolog")) {
-			button.addEventListener("click", () => {
-				button.className = runButtonDisabledClass;
-				out.clear();
+		// } else if (language.contains("language-cpp")) {
+		// 	button.addEventListener("click", () => {
+		// 		button.className = runButtonDisabledClass;
+		// 		// out.clear();
+		// 		// this.runCpp(srcCode, out);
+		// 		// button.className = runButtonClass;
+		// 		this.runCode(srcCode, out, button, "cpp");
+		// 	})
 
-				const prologCode = srcCode.split(/\n+%+\s*query\n+/);
-				if (prologCode.length < 2) return;	// no query found
+		// } else if (language.contains("language-prolog")) {
+		// 	button.addEventListener("click", () => {
+		// 		button.className = runButtonDisabledClass;
+		// 		// out.clear();
 
-				this.runPrologCode(prologCode, out);
+		// 		// const prologCode = srcCode.split(/\n+%+\s*query\n+/);
+		// 		// if (prologCode.length < 2) return;	// no query found
 
-				button.className = runButtonClass;
-			})
+		// 		// this.runPrologCode(prologCode, out);
 
-		} else if (language.contains("language-groovy")) {
-			button.addEventListener("click", () => {
-				button.className = runButtonDisabledClass;
-				this.runCodeInShell(srcCode, out, button, this.settings.groovyPath, this.settings.groovyArgs, this.settings.groovyFileExtension);
-			});
+		// 		// button.className = runButtonClass;
+		// 		this.runCode(srcCode, out, button, "cpp");
+		// 	})
 
-		} else if (language.contains("language-rust")) {
-			button.addEventListener("click", () => {
-				button.className = runButtonDisabledClass;
+		// } else if (language.contains("language-groovy")) {
+		// 	button.addEventListener("click", () => {
+		// 		button.className = runButtonDisabledClass;
+		// 		this.runCode(srcCode, out, button, "groovy");
+		// 		// this.runCodeInShell(srcCode, out, button, this.settings.groovyPath, this.settings.groovyArgs, this.settings.groovyFileExtension);
+		// 	});
 
-				this.runCode(srcCode, out, button, this.settings.cargoPath, this.settings.cargoArgs, this.settings.rustFileExtension);
-			});
+		// } else if (language.contains("language-rust")) {
+		// 	button.addEventListener("click", () => {
+		// 		button.className = runButtonDisabledClass;
 
-		} else if (language.contains("language-r")) {
-			button.addEventListener("click", () => {
-				button.className = runButtonDisabledClass;
+		// 		this.runCode(srcCode, out, button, "rust");
+		// 	});
 
-				srcCode = addInlinePlotsToR(srcCode);
-				console.log(srcCode);
+		// } else if (language.contains("language-r")) {
+		// 	button.addEventListener("click", () => {
+		// 		button.className = runButtonDisabledClass;
 
-				this.runCode(srcCode, out, button, this.settings.RPath, this.settings.RArgs, "R");
-			});
-		} else if (language.contains("language-go")) {
-			button.addEventListener("click", () => {
-				button.className = runButtonDisabledClass;
+		// 		srcCode = addInlinePlotsToR(srcCode);
+		// 		console.log(srcCode);
 
-				this.runCode(srcCode, out, button, this.settings.golangPath, this.settings.golangArgs, this.settings.golangFileExtension);
-			});
-		} else if (language.contains("language-kotlin")) {
-			button.addEventListener("click", () => {
-				button.className = runButtonDisabledClass;
-				this.runCodeInShell(srcCode, out, button, this.settings.kotlinPath, this.settings.kotlinArgs, this.settings.kotlinFileExtension);
-			});
-		}
+		// 		this.runCode(srcCode, out, button, "r");
+		// 	});
+		// } else if (language.contains("language-go")) {
+		// 	button.addEventListener("click", () => {
+		// 		button.className = runButtonDisabledClass;
+
+		// 		this.runCode(srcCode, out, button, "go");
+		// 	});
+		// } else if (language.contains("language-kotlin")) {
+		// 	button.addEventListener("click", () => {
+		// 		button.className = runButtonDisabledClass;
+		// 		this.runCode(srcCode, out, button, "kotlin");
+		// 	});
+		// }
 	}
 
 	private getVaultVariables() {
@@ -292,25 +300,34 @@ export default class ExecuteCodePlugin extends Plugin {
 		new Notice("Error while executing code!");
 	}
 
-	private runCode(codeBlockContent: string, outputter: Outputter, button: HTMLButtonElement, cmd: string, cmdArgs: string, ext: string) {
+	private runCode(codeBlockContent: string, outputter: Outputter, button: HTMLButtonElement, lang: string) {
 		new Notice("Running...");
-		const tempFileName = this.getTempFile(ext)
-		console.debug(`Execute ${cmd} ${cmdArgs} ${tempFileName}`);
+		// const tempFileName = this.getTempFile(ext)
+		// console.debug(`Execute ${cmd} ${cmdArgs} ${tempFileName}`);
 
-		fs.promises.writeFile(tempFileName, codeBlockContent)
-			.then(() => {
-				const args = cmdArgs ? cmdArgs.split(" ") : [];
-				args.push(tempFileName);
+		const client = piston({ server: "https://emkc.org" });
 
-				console.debug(`Execute ${cmd} ${args.join(" ")}`);
-				const child = child_process.spawn(cmd, args);
+		client.execute(lang, codeBlockContent).then((result) => {
+			button.className = runButtonClass;
+			new Notice(result.run.code === 0 ? "Done!" : "Error!");
 
-				this.handleChildOutput(child, outputter, button, tempFileName);
-			})
-			.catch((err) => {
-				this.notifyError(cmd, cmdArgs, tempFileName, err, outputter);
-				button.className = runButtonClass;
-			});
+			outputter.write(result.run.output);
+		})
+
+		// fs.promises.writeFile(tempFileName, codeBlockContent)
+		// 	.then(() => {
+		// 		const args = cmdArgs ? cmdArgs.split(" ") : [];
+		// 		args.push(tempFileName);
+
+		// 		console.debug(`Execute ${cmd} ${args.join(" ")}`);
+		// 		const child = child_process.spawn(cmd, args);
+
+				// this.handleChildOutput(child, outputter, button, tempFileName);
+		// 	})
+		// 	.catch((err) => {
+		// 		this.notifyError(cmd, cmdArgs, tempFileName, err, outputter);
+		// 		button.className = runButtonClass;
+		// 	});
 	}
 
 	private runCodeInShell(codeBlockContent: string, outputter: Outputter, button: HTMLButtonElement, cmd: string, cmdArgs: string, ext: string) {

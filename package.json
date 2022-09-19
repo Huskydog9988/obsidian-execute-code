@@ -26,6 +26,7 @@
 		"JSCPP": "^2.0.9",
 		"moment": "^2.29.3",
 		"original-fs": "^1.1.0",
+		"piston-client": "^1.0.2",
 		"tau-prolog": "^0.3.2"
 	}
 }
